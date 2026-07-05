@@ -711,9 +711,6 @@ function SectionDetail({ day, article, sectionId, sectionsMap, onBack, onMarkSec
   const [allHighlights, setAllHighlights] = useState(() => getHighlights());
   const onChangeHighlights = useCallback((updated) => setAllHighlights({ ...updated }), []);
   const highlightsFor = (sid) => getHighlightsFor(day, sid, allHighlights);
-  const [selectionInfo, setSelectionInfo] = useState(null);
-  useEffect(() => { _setSelectionAction = (info) => setSelectionInfo(info); return () => { _setSelectionAction = null; }; }, []);
-  useEffect(() => { setSelectionInfo(null); }, [sectionId]); // clear when switching sections
 
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" }); }, [sectionId]);
 
@@ -761,106 +758,93 @@ function SectionDetail({ day, article, sectionId, sectionsMap, onBack, onMarkSec
         className: "w-full py-3 text-stone-500 text-sm font-medium mt-2",
         style: { minHeight: 44 }
       }, "Back to sections")
-    ),
-    h(HighlightActionBar, { info: selectionInfo, onClose: () => setSelectionInfo(null) })
+    )
   );
 }
 
 /* ============================================================
-   Highlightable paragraph — used across text-heavy sections
+   Tap-to-highlight sentences
+   Approach: split each paragraph into sentences, render each as a
+   non-selectable tap target. A single tap toggles the highlight
+   for that sentence. Because there is no text selection, browser
+   menus (copy / share / "search web for…") never appear.
    ============================================================ */
-// Shared bottom-bar controller so all HighlightableText instances share one bottom action bar.
-// (Mobile browsers cover floating popups with the native selection menu; a bottom-fixed bar sits below the menu and is always tappable.)
-let _setSelectionAction = null; // (info|null) => void — set by SectionDetail
+function splitIntoSentences(text) {
+  // Return array of {start, end, text}. Sentence terminators are ., !, ?, …
+  // followed by whitespace (or end of string). Simple regex — works well
+  // for our clean narrative prose.
+  const out = [];
+  const re = /[^.!?…]+[.!?…]+["'”’)\]]?/g;
+  let m;
+  let last = 0;
+  while ((m = re.exec(text)) !== null) {
+    const start = m.index;
+    const end = start + m[0].length;
+    out.push({ start, end, text: text.slice(start, end) });
+    last = end;
+  }
+  if (last < text.length) {
+    const rest = text.slice(last);
+    if (rest.trim()) out.push({ start: last, end: text.length, text: rest });
+  }
+  if (!out.length) out.push({ start: 0, end: text.length, text });
+  return out;
+}
 
 function HighlightableText({ text, day, sectionId, highlights, onChangeHighlights }) {
   const paragraphs = text.split(/\n\n+/);
-  const containerRef = useRef(null);
+  const paraSentences = useMemo(() => paragraphs.map(splitIntoSentences), [text]);
 
-  useEffect(() => {
-    const onSelect = () => {
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
-      const range = sel.getRangeAt(0);
-      const startNode = range.startContainer.nodeType === 3 ? range.startContainer.parentElement : range.startContainer;
-      const endNode = range.endContainer.nodeType === 3 ? range.endContainer.parentElement : range.endContainer;
-      if (!containerRef.current || !containerRef.current.contains(startNode) || !containerRef.current.contains(endNode)) return;
-      let pNode = startNode;
-      while (pNode && !pNode.dataset?.para) pNode = pNode.parentElement;
-      let pNodeEnd = endNode;
-      while (pNodeEnd && !pNodeEnd.dataset?.para) pNodeEnd = pNodeEnd.parentElement;
-      if (!pNode || !pNodeEnd || pNode !== pNodeEnd) return;
-      const paraIdx = Number(pNode.dataset.para);
-      const preRange = document.createRange();
-      preRange.selectNodeContents(pNode);
-      preRange.setEnd(range.startContainer, range.startOffset);
-      const start = preRange.toString().length;
-      const end = start + range.toString().length;
-      if (end <= start) return;
-      const selectedText = range.toString();
-      _setSelectionAction && _setSelectionAction({
-        day, sectionId, para: paraIdx, start, end, text: selectedText,
-        apply: () => {
-          const updated = addHighlight(day, sectionId, paraIdx, start, end);
-          onChangeHighlights && onChangeHighlights(updated);
-          try { window.getSelection().removeAllRanges(); } catch(e) {}
-          _setSelectionAction && _setSelectionAction(null);
-        }
-      });
-    };
-    // Fire on selectionchange but also on touchend/mouseup to catch the final selection state
-    document.addEventListener("selectionchange", onSelect);
-    document.addEventListener("mouseup", onSelect);
-    document.addEventListener("touchend", onSelect);
-    return () => {
-      document.removeEventListener("selectionchange", onSelect);
-      document.removeEventListener("mouseup", onSelect);
-      document.removeEventListener("touchend", onSelect);
-    };
-  }, [paragraphs.length, day, sectionId, onChangeHighlights]);
-
-  const removeAt = (para, offset) => {
-    const updated = removeHighlightAt(day, sectionId, para, offset);
-    onChangeHighlights && onChangeHighlights(updated);
+  const isSentenceHighlighted = (para, s, e) => {
+    const list = highlights || [];
+    return list.some(h => h.p === para && h.s <= s && h.e >= e);
+  };
+  const toggleSentence = (para, s, e) => {
+    if (isSentenceHighlighted(para, s, e)) {
+      // Remove any highlight in this paragraph that covers this sentence
+      const all = getHighlights();
+      const key = `${day}-${sectionId}`;
+      const list = all[key] || [];
+      all[key] = list.filter(h => !(h.p === para && h.s <= s && h.e >= e));
+      setHighlights(all);
+      onChangeHighlights && onChangeHighlights(all);
+    } else {
+      const updated = addHighlight(day, sectionId, para, s, e);
+      onChangeHighlights && onChangeHighlights(updated);
+    }
   };
 
-  return h("div", { ref: containerRef, className: "reading" },
+  return h("div", { className: "reading", style: { userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" } },
     paragraphs.map((p, i) => {
-      const ranges = (highlights || []).filter(r => r.p === i).sort((a, b) => a.s - b.s);
-      return h("p", { key: i, "data-para": i }, renderParagraph(p, ranges, day, sectionId, i, removeAt));
+      const sentences = paraSentences[i];
+      return h("p", { key: i, "data-para": i },
+        // Render each sentence as a tap target, keeping surrounding whitespace
+        (() => {
+          const nodes = [];
+          let cursor = 0;
+          sentences.forEach((sen, sj) => {
+            // Whitespace between last sentence and this one
+            if (sen.start > cursor) nodes.push(p.slice(cursor, sen.start));
+            const active = isSentenceHighlighted(i, sen.start, sen.end);
+            nodes.push(h("span", {
+              key: `s${sj}`,
+              className: "dk-sentence",
+              onClick: (e) => { e.stopPropagation(); toggleSentence(i, sen.start, sen.end); },
+              style: {
+                backgroundColor: active ? "#FDE68A" : "transparent",
+                borderRadius: 3,
+                padding: active ? "1px 2px" : "0",
+                cursor: "pointer",
+                transition: "background-color 0.15s ease",
+              }
+            }, sen.text));
+            cursor = sen.end;
+          });
+          if (cursor < p.length) nodes.push(p.slice(cursor));
+          return nodes;
+        })()
+      );
     })
-  );
-}
-
-/* Bottom action bar shown when text is selected inside a HighlightableText.
-   Rendered once by SectionDetail; controlled via the shared _setSelectionAction hook. */
-function HighlightActionBar({ info, onClose }) {
-  if (!info) return null;
-  const preview = info.text.length > 60 ? info.text.slice(0, 55).trim() + "…" : info.text;
-  return h("div", {
-    className: "fixed inset-x-0 bottom-0 z-40 safe-bottom",
-    style: { pointerEvents: "auto" }
-  },
-    h("div", { className: "mx-3 mb-3 rounded-2xl bg-stone-900 text-white shadow-2xl overflow-hidden" },
-      h("div", { className: "px-4 pt-3 pb-2 text-[12px] text-white/70 truncate" }, "“", preview, "”"),
-      h("div", { className: "flex" },
-        h("button", {
-          onMouseDown: (e) => e.preventDefault(),
-          onClick: () => info.apply(),
-          className: "flex-1 py-3.5 font-semibold text-[15px] flex items-center justify-center gap-2 active:bg-white/10",
-          style: { minHeight: 52 }
-        },
-          h("span", { style: { color: "#FBBF24", fontSize: 18 } }, "★"),
-          "Highlight"
-        ),
-        h("button", {
-          onClick: () => { try { window.getSelection().removeAllRanges(); } catch(e) {} onClose(); },
-          className: "w-14 border-l border-white/10 text-white/60 active:bg-white/10",
-          style: { minHeight: 52 },
-          "aria-label": "Dismiss"
-        }, "✕")
-      )
-    )
   );
 }
 
