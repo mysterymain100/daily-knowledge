@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Daily" />
+<meta name="theme-color" content="#FAF8F4" />
+<title>Daily — General Knowledge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="data.js"></script>
+<style>
+  :root {
+    --bg: #FAF8F4;
+    --ink: #1B1B1B;
+    --muted: #6B6B6B;
+    --soft: #F1EEE7;
+    --border: #E8E4DA;
+    --card: #FFFFFF;
+  }
+  html, body, #root { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: contain;
+  }
+  .serif { font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif; }
+  .reading {
+    font-family: 'Source Serif 4', Georgia, serif;
+    font-size: 19px;
+    line-height: 1.75;
+    color: #222;
+    letter-spacing: -0.005em;
+  }
+  .reading p { margin-bottom: 1.1em; }
+  .reading p:last-child { margin-bottom: 0; }
+  .fade-in { animation: fadeIn 0.3s ease-out both; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  button { -webkit-tap-highlight-color: transparent; }
+  textarea { font-family: 'Source Serif 4', Georgia, serif; }
+  .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom, 0), 8px); }
+  .safe-top { padding-top: env(safe-area-inset-top, 0); }
+  /* Hide scrollbar but keep scroll */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  /* Subtle confetti dots for celebration */
+  .celebration-dot {
+    position: absolute;
+    width: 6px; height: 6px; border-radius: 50%;
+    opacity: 0;
+    animation: pop 1.4s ease-out forwards;
+  }
+  @keyframes pop {
+    0% { opacity: 0; transform: translate(0, 0) scale(0.4); }
+    20% { opacity: 1; }
+    100% { opacity: 0; transform: translate(var(--tx, 0), var(--ty, -40px)) scale(1); }
+  }
+  /* Scroll behaviour */
+  html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+"use strict";
+
+const { useState, useEffect, useMemo, useRef, useCallback, useLayoutEffect } = React;
+const h = React.createElement;
+const Fragment = React.Fragment;
+
+/* ============================================================
+   CATEGORY COLOURS
+   ============================================================ */
+const CATEGORY_COLORS = {
+  "History":         { bg: "#FEF3C7", text: "#92400E", dot: "#F59E0B", solid: "#F59E0B" },
+  "Geography":       { bg: "#CCFBF1", text: "#115E59", dot: "#0D9488", solid: "#0D9488" },
+  "Politics":        { bg: "#DBEAFE", text: "#1E40AF", dot: "#3B82F6", solid: "#3B82F6" },
+  "Economics":       { bg: "#EDE9FE", text: "#5B21B6", dot: "#8B5CF6", solid: "#8B5CF6" },
+  "Religion":        { bg: "#FFE4E6", text: "#9F1239", dot: "#F43F5E", solid: "#F43F5E" },
+  "Culture":         { bg: "#FFEDD5", text: "#9A3412", dot: "#F97316", solid: "#F97316" },
+  "Current Affairs": { bg: "#E2E8F0", text: "#1E293B", dot: "#475569", solid: "#475569" },
+};
+const normCat = (c) => {
+  if (!c) return "History";
+  const first = String(c).split("/")[0].trim();
+  return CATEGORY_COLORS[first] ? first : "History";
+};
+
+/* ============================================================
+   CURRICULUM (91 days) — used for week numbers, archive & progress
+   ============================================================ */
+const CURRICULUM = [
+  { day:1,  week:1,  title:"How to Read the World — Continents, Regions, and Oceans", category:"Geography" },
+  { day:2,  week:1,  title:"The Ancient World — Mesopotamia and the First Civilisations", category:"History" },
+  { day:3,  week:1,  title:"The Major Religions of the World — Origins and Core Beliefs", category:"Religion" },
+  { day:4,  week:1,  title:"How Empires Work — What They Are, Why They Rise, and Why They Fall", category:"History" },
+  { day:5,  week:1,  title:"Ancient Egypt — The Nile, the Pharaohs, and the Legacy", category:"History" },
+  { day:6,  week:1,  title:"Ancient Greece — Democracy, Philosophy, and the Western Foundation", category:"History" },
+  { day:7,  week:1,  title:"The Roman Republic — How Rome Governed Itself Before the Emperors", category:"History" },
+  { day:8,  week:2,  title:"Ancient India — The Vedic Age, the Maurya Empire, and Early Culture", category:"History" },
+  { day:9,  week:2,  title:"Ancient China — From the Yellow River to the Han Dynasty", category:"History" },
+  { day:10, week:2,  title:"Africa Before Colonialism — Kingdoms, Trade Routes, and Civilisations", category:"History" },
+  { day:11, week:3,  title:"The Roman Empire — Rise, Peak, and the Fall That Changed Everything", category:"History" },
+  { day:12, week:3,  title:"The Spread of Islam — How a Religion Became a Civilisation in 100 Years", category:"Religion" },
+  { day:13, week:3,  title:"The Islamic Golden Age — Science, Medicine, Philosophy, and Trade", category:"History" },
+  { day:14, week:3,  title:"The Byzantine Empire — The Roman Empire That Survived for 1000 More Years", category:"History" },
+  { day:15, week:3,  title:"The Mongol Empire — The Largest Land Empire in History", category:"History" },
+  { day:16, week:3,  title:"The Crusades — Religion, Power, and the Fight for the Holy Land", category:"History" },
+  { day:17, week:4,  title:"The Ottoman Empire — 600 Years of Power Across Three Continents", category:"History" },
+  { day:18, week:4,  title:"The Silk Road — How Trade Connected China, India, Persia, and Europe", category:"History" },
+  { day:19, week:4,  title:"Medieval Europe — Feudalism, the Church, and the Power Struggle", category:"History" },
+  { day:20, week:4,  title:"The Middle East — Cradle of Three Religions and Crossroads of the World", category:"Geography" },
+  { day:21, week:5,  title:"The Renaissance — How Europe Rediscovered Knowledge and Changed Forever", category:"Culture" },
+  { day:22, week:5,  title:"The Protestant Reformation — How One Monk Split Christianity and Changed Politics", category:"Religion" },
+  { day:23, week:5,  title:"The Age of Exploration — How Europe Found, Mapped, and Claimed the World", category:"History" },
+  { day:24, week:5,  title:"The Aztec and Inca Empires — Great Civilisations That Were Destroyed", category:"History" },
+  { day:25, week:5,  title:"The Transatlantic Slave Trade — History, Scale, and Legacy", category:"History" },
+  { day:26, week:6,  title:"The Mughal Empire — How India Was Ruled at Its Most Prosperous", category:"History" },
+  { day:27, week:6,  title:"The British Empire — How It Was Built and How It Worked", category:"History" },
+  { day:28, week:6,  title:"The French Revolution — Liberty, Chaos, Terror, and Napoleon", category:"History" },
+  { day:29, week:6,  title:"The Industrial Revolution — How the Modern Economy Was Born", category:"History" },
+  { day:30, week:6,  title:"Latin America — Colonial Legacy, Independence, and Identity", category:"History" },
+  { day:31, week:7,  title:"Colonialism in Africa — How an Entire Continent Was Divided by Outsiders", category:"History" },
+  { day:32, week:7,  title:"Colonialism in Asia — India, Southeast Asia, and China Under European Control", category:"History" },
+  { day:33, week:7,  title:"World War I — Why It Started, How It Was Fought, What It Destroyed", category:"History" },
+  { day:34, week:7,  title:"The Russian Revolution — How the Soviet Union Was Born", category:"History" },
+  { day:35, week:7,  title:"The Rise of Fascism — Italy, Germany, and the Road to World War II", category:"History" },
+  { day:36, week:8,  title:"World War II — The Deadliest Conflict in Human History", category:"History" },
+  { day:37, week:8,  title:"The Holocaust — What Happened, How It Was Possible, Why We Must Remember", category:"History" },
+  { day:38, week:8,  title:"Indian Independence and Partition — Gandhi, Jinnah, and 1947", category:"History" },
+  { day:39, week:8,  title:"The Decolonisation of Africa — How 50+ Nations Were Born in 20 Years", category:"History" },
+  { day:40, week:8,  title:"China's Revolution — Mao Zedong and the Birth of Communist China", category:"History" },
+  { day:41, week:9,  title:"The Cold War — USA vs USSR, Capitalism vs Communism", category:"History" },
+  { day:42, week:9,  title:"The Korean War — The Forgotten War That Still Divides a Peninsula", category:"History" },
+  { day:43, week:9,  title:"The Vietnam War — Why America Lost and What It Meant", category:"History" },
+  { day:44, week:9,  title:"The Space Race — Science, Pride, and Superpower Competition", category:"History" },
+  { day:45, week:9,  title:"The Cuban Missile Crisis — The 13 Days the World Almost Ended", category:"History" },
+  { day:46, week:9,  title:"The Middle East After WWII — How Modern Arab States Were Created", category:"History" },
+  { day:47, week:9,  title:"The End of the Cold War — How the Soviet Union Collapsed", category:"History" },
+  { day:48, week:10, title:"What Is Democracy? — How It Works, Where It Exists, Why It Struggles", category:"Politics" },
+  { day:49, week:10, title:"Dictatorship and Authoritarianism — Types, Examples, and How They Survive", category:"Politics" },
+  { day:50, week:10, title:"Parliament vs Presidential Systems — Key Differences with Real Examples", category:"Politics" },
+  { day:51, week:10, title:"Left Wing vs Right Wing — What These Actually Mean and Where They Come From", category:"Politics" },
+  { day:52, week:10, title:"What Is a Constitution? — Why Countries Have One and What It Protects", category:"Politics" },
+  { day:53, week:10, title:"Federalism — How Power Is Shared in Large and Diverse Countries", category:"Politics" },
+  { day:54, week:10, title:"How Elections Work — Voting Systems, Campaigns, and Democratic Processes", category:"Politics" },
+  { day:55, week:11, title:"Capitalism — How It Works, Where It Came From, and Its Contradictions", category:"Economics" },
+  { day:56, week:11, title:"Socialism and Communism — Theory, Reality, and the Difference Between Them", category:"Economics" },
+  { day:57, week:11, title:"How Taxation Works — Why Governments Need It and How They Spend It", category:"Economics" },
+  { day:58, week:11, title:"Inflation, Recession, and Economic Cycles — Why Economies Rise and Fall", category:"Economics" },
+  { day:59, week:11, title:"Global Trade — How Countries Depend on Each Other and What Happens When They Don't", category:"Economics" },
+  { day:60, week:11, title:"Poverty and Inequality — Why It Exists, How It Persists, and What Works", category:"Economics" },
+  { day:61, week:11, title:"Migration — Why People Move, What It Causes, and How Countries Respond", category:"Politics" },
+  { day:62, week:11, title:"How Central Banks Work — Interest Rates, Money Supply, and Financial Stability", category:"Economics" },
+  { day:63, week:12, title:"Hinduism — The World's Oldest Living Religion", category:"Religion" },
+  { day:64, week:12, title:"Buddhism — The Middle Path and Its Spread Across Asia", category:"Religion" },
+  { day:65, week:12, title:"Judaism — History, Identity, and Why It Matters to the World", category:"Religion" },
+  { day:66, week:12, title:"Christianity — From a Small Sect to the World's Largest Religion", category:"Religion" },
+  { day:67, week:12, title:"Islam — History, Beliefs, Divisions, and Global Presence", category:"Religion" },
+  { day:68, week:13, title:"Secularism — The Separation of Religion and State", category:"Politics" },
+  { day:69, week:13, title:"Nationalism — What It Is, Why It Rises, and When It Becomes Dangerous", category:"Politics" },
+  { day:70, week:13, title:"Language and Identity — How the Languages We Speak Shape Who We Are", category:"Culture" },
+  { day:71, week:13, title:"The Culture Wars — Why Societies Argue About Values and Identity", category:"Culture" },
+  { day:72, week:14, title:"Israel and Palestine — The Full History Behind the Conflict", category:"Current Affairs" },
+  { day:73, week:14, title:"Russia and Ukraine — From the Soviet Union to the War", category:"Current Affairs" },
+  { day:74, week:14, title:"China and Taiwan — The One China Question Explained", category:"Current Affairs" },
+  { day:75, week:14, title:"India and Pakistan — Partition, Wars, Nuclear Tension, and Today", category:"Current Affairs" },
+  { day:76, week:14, title:"The European Union — How It Was Built, What It Does, and Why It Struggles", category:"Current Affairs" },
+  { day:77, week:14, title:"NATO — What It Is, Why It Was Created, and Why It Still Exists", category:"Current Affairs" },
+  { day:78, week:15, title:"The United States — How Its Political System Works and Why It's Complicated", category:"Current Affairs" },
+  { day:79, week:15, title:"Germany's Political System — How History Shaped a Democracy Built to Prevent Itself", category:"Current Affairs" },
+  { day:80, week:15, title:"Climate Politics — Why Countries Disagree on the Most Important Issue of Our Time", category:"Current Affairs" },
+  { day:81, week:16, title:"9/11 and the War on Terror — How One Morning Changed the 21st Century", category:"Current Affairs" },
+  { day:82, week:16, title:"The Rise of China — From Poverty to Superpower in 40 Years", category:"Current Affairs" },
+  { day:83, week:16, title:"The Middle East Today — Iran, Saudi Arabia, and the Regional Power Struggle", category:"Current Affairs" },
+  { day:84, week:16, title:"Africa Today — The Fastest Growing Continent and Its Challenges", category:"Current Affairs" },
+  { day:85, week:16, title:"The United Nations — What It Does, What It Can't Do, and Why It Matters", category:"Politics" },
+  { day:86, week:16, title:"How the Internet Changed Politics — Social Media, Misinformation, and Democracy", category:"Culture" },
+  { day:87, week:16, title:"Artificial Intelligence and the World — Economic, Political, and Social Consequences", category:"Culture" },
+  { day:88, week:16, title:"The History of Money — From Barter to Bitcoin", category:"Economics" },
+  { day:89, week:16, title:"What Is Globalisation? — How the World Became Interconnected and What It Costs", category:"Economics" },
+  { day:90, week:16, title:"Human Rights — Where the Idea Came From and How It Is Fought For", category:"Politics" },
+  { day:91, week:16, title:"Where the World Is Heading — Key Global Trends for the Next Decade", category:"Current Affairs" },
+];
+const TOTAL_DAYS = CURRICULUM.length;
+
+/* ============================================================
+   SECTIONS — the 8 chunks every day is broken into
+   ============================================================ */
+const SECTIONS = [
+  { id: "why",        label: "Why this matters",      blurb: "Why care in 2026.",                icon: "✦" },
+  { id: "map",        label: "Where in the world",    blurb: "Geography of today's topic.",      icon: "◐" },
+  { id: "timeline",   label: "Timeline",              blurb: "The story in dates.",              icon: "↳" },
+  { id: "article",    label: "The main article",      blurb: "The full 2,000-word read.",        icon: "❡" },
+  { id: "terms",      label: "Key terms",             blurb: "Words worth remembering.",         icon: "✎" },
+  { id: "facts",      label: "Did you know?",         blurb: "Surprising, memorable facts.",     icon: "✺" },
+  { id: "quiz",       label: "Quiz",                  blurb: "Five questions, no rush.",         icon: "?" },
+  { id: "reflection", label: "Reflection",            blurb: "Write it in your own words.",     icon: "✍" },
+];
+const SECTION_IDS = SECTIONS.map(s => s.id);
+
+/* ============================================================
+   localStorage
+   ============================================================ */
+const LS = {
+  get(k, fb) { try { const v = localStorage.getItem(k); return v === null ? fb : JSON.parse(v); } catch(e) { return fb; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} },
+  rm(k) { try { localStorage.removeItem(k); } catch(e) {} },
+};
+const K = {
+  onboarded: "dk2.onboarded",
+  name: "dk2.name",
+  sections: "dk2.sections",     // { "1-why": true, ... }
+  quiz: (d) => `dk2.quiz.${d}`,
+  reflection: (d) => `dk2.reflection.${d}`,
+  activeDay: "dk2.activeDay",
+  highlights: "dk2.highlights",  // { "day-section": [{p, s, e}, ...] }
+};
+
+/* Highlight helpers.
+   A highlight is scoped to: day + section id + paragraph index + [start,end) char range.
+   The paragraphs of any given section are determined at render time by splitting content on \n\n. */
+function getHighlights() { return LS.get(K.highlights, {}); }
+function setHighlights(h) { LS.set(K.highlights, h); }
+function getHighlightsFor(day, sectionId, allMap) {
+  const m = allMap || getHighlights();
+  return m[`${day}-${sectionId}`] || [];
+}
+function addHighlight(day, sectionId, para, start, end) {
+  const all = getHighlights();
+  const key = `${day}-${sectionId}`;
+  const list = all[key] || [];
+  // Merge with any overlapping existing highlights on the same paragraph
+  const same = list.filter(x => x.p === para);
+  const other = list.filter(x => x.p !== para);
+  same.push({ p: para, s: start, e: end });
+  same.sort((a, b) => a.s - b.s);
+  const merged = [];
+  for (const h of same) {
+    const last = merged[merged.length - 1];
+    if (last && h.s <= last.e) last.e = Math.max(last.e, h.e);
+    else merged.push({ ...h });
+  }
+  all[key] = other.concat(merged);
+  setHighlights(all);
+  return all;
+}
+function removeHighlightAt(day, sectionId, para, offset) {
+  const all = getHighlights();
+  const key = `${day}-${sectionId}`;
+  const list = all[key] || [];
+  const filtered = list.filter(x => !(x.p === para && offset >= x.s && offset < x.e));
+  if (filtered.length === list.length) return all;
+  all[key] = filtered;
+  setHighlights(all);
+  return all;
+}
+/* Render a paragraph string with highlights applied.
+   `ranges` is an array of {s,e} sorted by s, non-overlapping.
+   Highlighted <mark> tags carry data-attrs so we can remove them on tap. */
+function renderParagraph(text, ranges, day, sectionId, para, onRemove) {
+  if (!ranges || !ranges.length) return text;
+  const parts = [];
+  let i = 0;
+  for (const r of ranges) {
+    if (r.s > i) parts.push(text.slice(i, r.s));
+    parts.push(h("mark", {
+      key: `m${r.s}`,
+      className: "dk-mark",
+      style: { backgroundColor: "#FEF3C7", color: "inherit", padding: "1px 2px", borderRadius: 3, cursor: "pointer" },
+      onClick: (e) => { e.stopPropagation(); onRemove && onRemove(para, r.s); }
+    }, text.slice(r.s, r.e)));
+    i = r.e;
+  }
+  if (i < text.length) parts.push(text.slice(i));
+  return parts;
+}
+
+function getArticle(day) {
+  return (window.DAILY_ARTICLES && window.DAILY_ARTICLES[day]) || null;
+}
+function getSections() { return LS.get(K.sections, {}); }
+function setSections(s) { LS.set(K.sections, s); }
+function isSectionDone(day, id, sectionsMap) {
+  const m = sectionsMap || getSections();
+  return !!m[`${day}-${id}`];
+}
+function countSectionsDone(day, sectionsMap) {
+  const m = sectionsMap || getSections();
+  return SECTION_IDS.reduce((n, id) => n + (m[`${day}-${id}`] ? 1 : 0), 0);
+}
+function isDayComplete(day, sectionsMap) {
+  return countSectionsDone(day, sectionsMap) === SECTION_IDS.length;
+}
+function maxUnlockedDay(sectionsMap) {
+  const m = sectionsMap || getSections();
+  let d = 1;
+  while (d <= TOTAL_DAYS && isDayComplete(d, m)) d++;
+  return d; // == TOTAL_DAYS + 1 when all done
+}
+function totalCompletedDays(sectionsMap) {
+  const m = sectionsMap || getSections();
+  let n = 0;
+  for (let d = 1; d <= TOTAL_DAYS; d++) if (isDayComplete(d, m)) n++;
+  return n;
+}
+
+/* ============================================================
+   Small UI atoms
+   ============================================================ */
+function CategoryBadge({ category, size }) {
+  const c = CATEGORY_COLORS[normCat(category)];
+  const cls = size === "sm"
+    ? "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium"
+    : "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium";
+  return h("span", { className: cls, style: { backgroundColor: c.bg, color: c.text } },
+    h("span", { className: "w-1.5 h-1.5 rounded-full", style: { backgroundColor: c.dot } }),
+    category
+  );
+}
+
+function ProgressBar({ pct, color, height }) {
+  return h("div", { className: "w-full bg-stone-200 rounded-full overflow-hidden", style: { height: height || 4 } },
+    h("div", {
+      className: "h-full rounded-full transition-all duration-500",
+      style: { width: `${pct}%`, backgroundColor: color || "#1B1B1B" }
+    })
+  );
+}
+
+function Check({ done, color }) {
+  // Round checkbox-like indicator
+  if (done) {
+    return h("div", {
+      className: "w-7 h-7 rounded-full flex items-center justify-center text-white",
+      style: { backgroundColor: color || "#10B981" }
+    }, h("svg", { width: 14, height: 14, viewBox: "0 0 24 24", fill: "none" },
+      h("path", { d: "M5 12l5 5 9-11", stroke: "currentColor", strokeWidth: 2.8, strokeLinecap: "round", strokeLinejoin: "round" })
+    ));
+  }
+  return h("div", { className: "w-7 h-7 rounded-full border-2 border-stone-300" });
+}
+
+/* ============================================================
+   Image components with graceful failure + tap-to-enlarge
+   ============================================================ */
+let _openLightbox = null; // set by App; called by images
+function HeroFallback({ day, week, title, category }) {
+  const cat = CATEGORY_COLORS[normCat(category)];
+  return h("div", { className: "relative w-full overflow-hidden flex flex-col justify-end px-6 py-8", style: {
+      aspectRatio: "16 / 10",
+      background: `linear-gradient(135deg, ${cat.solid} 0%, ${cat.text} 100%)`,
+    } },
+    // Subtle diagonal pattern overlay
+    h("div", { className: "absolute inset-0 pointer-events-none opacity-15", style: {
+      backgroundImage: "repeating-linear-gradient(45deg, rgba(255,255,255,0.35) 0 2px, transparent 2px 22px)"
+    } }),
+    h("div", { className: "relative" },
+      h("div", { className: "text-[10px] uppercase tracking-widest text-white/80 mb-2 font-semibold" }, `Day ${day} · Week ${week} · ${category}`),
+      h("div", { className: "serif text-white text-2xl leading-[1.15]", style: { fontWeight: 600, maxWidth: "90%" } }, title)
+    )
+  );
+}
+function HeroImage({ src, alt, credit, day, week, title, category }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [src]);
+  if (!src || failed) {
+    // Fallback: beautiful colored card so every day has a hero
+    return h(HeroFallback, { day, week, title, category });
+  }
+  return h("div", { className: "relative w-full overflow-hidden bg-stone-100", style: { aspectRatio: "16 / 10" } },
+    h("img", {
+      src, alt: alt || "",
+      loading: "eager",
+      className: "w-full h-full object-cover cursor-zoom-in",
+      onError: () => setFailed(true),
+      onClick: () => _openLightbox && _openLightbox({ src, alt, credit }),
+    }),
+    h("div", { className: "absolute inset-0 pointer-events-none", style: { background: "linear-gradient(to bottom, rgba(0,0,0,0) 55%, rgba(0,0,0,0.35) 100%)" } }),
+    credit && h("div", { className: "absolute bottom-1.5 right-2 text-[10px] text-white/85 leading-none px-1.5 py-1 rounded pointer-events-none", style: { backgroundColor: "rgba(0,0,0,0.35)" } }, credit),
+    h("div", { className: "absolute top-2 right-2 w-8 h-8 rounded-full bg-black/35 text-white flex items-center justify-center pointer-events-none" },
+      h("svg", { width: 14, height: 14, viewBox: "0 0 24 24", fill: "none" },
+        h("path", { d: "M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" })
+      )
+    )
+  );
+}
+function MapFigure({ src, alt, caption, credit }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [src]);
+  if (!src || failed) return null;
+  return h("figure", { className: "mb-5 -mx-1" },
+    h("div", {
+      className: "rounded-2xl overflow-hidden bg-stone-100 border border-stone-200 cursor-zoom-in",
+      onClick: () => _openLightbox && _openLightbox({ src, alt, credit, caption }),
+    },
+      h("img", {
+        src, alt: alt || "",
+        loading: "lazy",
+        className: "w-full h-auto block",
+        onError: () => setFailed(true),
+      })
+    ),
+    (caption || credit) && h("figcaption", { className: "mt-2 px-1 text-[12px] text-stone-500 leading-snug" },
+      caption && h("span", { className: "text-stone-700" }, caption),
+      caption && credit && h("span", null, " · "),
+      credit && h("span", null, credit)
+    )
+  );
+}
+function Lightbox({ image, onClose }) {
+  const [scale, setScale] = useState(1);
+  const [tx, setTx] = useState(0);
+  const [ty, setTy] = useState(0);
+  const gesture = useRef(null); // {mode:'pinch'|'pan', ...}
+  const lastTap = useRef(0);
+
+  useEffect(() => {
+    if (!image) return;
+    // Reset when opened
+    setScale(1); setTx(0); setTy(0);
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [image]);
+  if (!image) return null;
+
+  const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+
+  const onTouchStart = (e) => {
+    if (e.touches.length === 2) {
+      const [a, b] = [e.touches[0], e.touches[1]];
+      const dx = a.clientX - b.clientX, dy = a.clientY - b.clientY;
+      gesture.current = {
+        mode: "pinch",
+        startDist: Math.hypot(dx, dy),
+        startScale: scale,
+        startTx: tx, startTy: ty,
+      };
+    } else if (e.touches.length === 1 && scale > 1) {
+      gesture.current = {
+        mode: "pan",
+        startX: e.touches[0].clientX,
+        startY: e.touches[0].clientY,
+        startTx: tx, startTy: ty,
+      };
+    }
+  };
+  const onTouchMove = (e) => {
+    const g = gesture.current;
+    if (!g) return;
+    if (g.mode === "pinch" && e.touches.length === 2) {
+      e.preventDefault();
+      const [a, b] = [e.touches[0], e.touches[1]];
+      const dx = a.clientX - b.clientX, dy = a.clientY - b.clientY;
+      const dist = Math.hypot(dx, dy);
+      const newScale = clamp(g.startScale * (dist / g.startDist), 1, 6);
+      setScale(newScale);
+    } else if (g.mode === "pan" && e.touches.length === 1) {
+      e.preventDefault();
+      const t = e.touches[0];
+      setTx(g.startTx + (t.clientX - g.startX));
+      setTy(g.startTy + (t.clientY - g.startY));
+    }
+  };
+  const onTouchEnd = (e) => {
+    if (e.touches.length === 0) {
+      // If we snapped back to <=1, reset translate
+      if (scale <= 1.05) { setScale(1); setTx(0); setTy(0); }
+      gesture.current = null;
+    }
+  };
+
+  const handleImgClick = (e) => {
+    e.stopPropagation();
+    const now = Date.now();
+    if (now - lastTap.current < 300) {
+      // double-tap toggles zoom
+      if (scale > 1) { setScale(1); setTx(0); setTy(0); }
+      else { setScale(2.5); }
+      lastTap.current = 0;
+    } else {
+      lastTap.current = now;
+    }
+  };
+
+  return h("div", {
+    className: "fixed inset-0 z-[70] bg-black flex items-center justify-center overflow-hidden",
+    onClick: onClose,
+  },
+    h("img", {
+      src: image.src, alt: image.alt || "",
+      className: "max-w-full max-h-full object-contain select-none",
+      onClick: handleImgClick,
+      onTouchStart, onTouchMove, onTouchEnd,
+      draggable: false,
+      style: {
+        transform: `translate(${tx}px, ${ty}px) scale(${scale})`,
+        transformOrigin: "center center",
+        transition: gesture.current ? "none" : "transform 0.18s ease-out",
+        touchAction: "none",
+      }
+    }),
+    h("button", {
+      onClick: (e) => { e.stopPropagation(); onClose(); },
+      className: "absolute top-4 right-4 w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center safe-top z-10",
+      "aria-label": "Close"
+    }, h("svg", { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none" },
+      h("path", { d: "M6 6l12 12M18 6L6 18", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" })
+    )),
+    scale > 1 && h("button", {
+      onClick: (e) => { e.stopPropagation(); setScale(1); setTx(0); setTy(0); },
+      className: "absolute top-4 left-4 h-10 px-3 rounded-full bg-white/15 text-white text-xs font-semibold safe-top z-10",
+    }, "Reset zoom"),
+    (image.caption || image.credit) && h("div", {
+      className: "absolute bottom-0 inset-x-0 p-4 text-[12.5px] text-white/80 leading-snug safe-bottom",
+      style: { background: "linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0))" },
+      onClick: (e) => e.stopPropagation()
+    },
+      image.caption && h("div", { className: "text-white mb-0.5" }, image.caption),
+      image.credit && h("div", null, image.credit),
+      h("div", { className: "text-[11px] text-white/60 mt-1" }, "Pinch or double-tap to zoom · drag to pan · tap outside to close")
+    )
+  );
+}
+
+/* ============================================================
+   Scroll progress hook (for section detail reading)
+   ============================================================ */
+function useScrollProgress() {
+  const [pct, setPct] = useState(0);
+  useEffect(() => {
+    const onScroll = () => {
+      const docEl = document.documentElement;
+      const max = docEl.scrollHeight - window.innerHeight;
+      const y = window.scrollY || docEl.scrollTop;
+      const p = max > 8 ? (y / max) * 100 : 100;
+      setPct(Math.min(100, Math.max(0, p)));
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    onScroll();
+    return () => { window.removeEventListener("scroll", onScroll); window.removeEventListener("resize", onScroll); };
+  }, []);
+  return pct;
+}
+
+/* ============================================================
+   ONBOARDING (first launch only — just optional name)
+   ============================================================ */
+function Onboarding({ onDone }) {
+  const [name, setName] = useState("");
+  return h("div", { className: "min-h-screen flex flex-col px-6 safe-top safe-bottom" },
+    h("div", { className: "pt-16 pb-8" },
+      h("div", { className: "text-xs uppercase tracking-widest text-stone-500 mb-3" }, "Daily"),
+      h("h1", { className: "serif text-4xl leading-tight text-stone-900 mb-3" }, "A quiet habit of learning."),
+      h("p", { className: "text-stone-600 text-base leading-relaxed" },
+        "One topic a day. Ninety-one days. The whole world, in the order it actually unfolded — from Mesopotamia to AI."
+      ),
+    ),
+    h("div", { className: "bg-white border border-stone-200 rounded-2xl p-5 mb-4" },
+      h("label", { className: "text-xs uppercase tracking-widest text-stone-500 mb-2 block" }, "What should I call you? (optional)"),
+      h("input", {
+        type: "text",
+        value: name,
+        onChange: (e) => setName(e.target.value),
+        placeholder: "Your name",
+        className: "w-full text-base py-3 px-3 bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:border-stone-400",
+        autoCorrect: "off", autoCapitalize: "words", spellCheck: "false",
+        maxLength: 40,
+      }),
+      h("p", { className: "text-xs text-stone-500 mt-3 leading-relaxed" },
+        "Your progress is saved on this device only. ",
+        "If you share this app with a friend, they get their own progress on their phone — yours is never affected."
+      ),
+    ),
+    h("button", {
+      onClick: () => onDone(name.trim()),
+      className: "w-full py-4 rounded-xl text-white font-semibold text-base transition-colors",
+      style: { backgroundColor: "#1B1B1B", minHeight: 52 }
+    }, "Begin Day 1"),
+    h("p", { className: "text-xs text-stone-400 text-center mt-4" }, "No accounts. No internet needed after first load.")
+  );
+}
+
+/* ============================================================
+   DAY OVERVIEW — list of 8 sections with checkboxes
+   ============================================================ */
+function DayOverview({ day, article, sectionsMap, onOpenSection, onMarkSection, userName, onAdvance }) {
+  const topic = CURRICULUM.find(t => t.day === day);
+  const cat = CATEGORY_COLORS[normCat(article.category || topic.category)];
+  const done = countSectionsDone(day, sectionsMap);
+  const total = SECTION_IDS.length;
+  const complete = done === total;
+  const nextDay = day + 1;
+
+  const hero = (article.images && article.images.hero) || {};
+  return h("div", { className: "fade-in pb-28" },
+    /* Hero image (always present — falls back to a colored card if the URL fails or is missing) */
+    h(HeroImage, {
+      src: hero.url, alt: hero.alt || article.title, credit: hero.credit,
+      day, week: topic.week, title: article.title, category: article.category || topic.category
+    }),
+    /* Header */
+    h("div", { className: "px-5 pt-4 pb-3" },
+      h("div", { className: "flex items-center justify-between text-xs text-stone-500 mb-3" },
+        h("span", { className: "font-medium" }, `Day ${day} of ${TOTAL_DAYS} · Week ${topic.week}`),
+        h(CategoryBadge, { category: article.category || topic.category, size: "sm" })
+      ),
+      h(ProgressBar, { pct: done / total * 100, color: cat.solid, height: 4 }),
+    ),
+    /* Title */
+    h("div", { className: "px-5 pt-5 pb-4" },
+      h("h1", { className: "serif text-3xl leading-[1.15] text-stone-900", style: { fontWeight: 600 } }, article.title),
+      h("p", { className: "text-stone-500 text-sm mt-3" }, done, " of ", total, " sections done")
+    ),
+    /* Why-this-matters preview (always visible to hook the reader) */
+    h("div", { className: "px-5 pb-6" },
+      h("div", { className: "rounded-2xl p-4 border", style: { backgroundColor: cat.bg + "80", borderColor: cat.bg } },
+        h("div", { className: "text-[11px] uppercase tracking-widest font-semibold mb-1.5", style: { color: cat.text } }, "Why this matters"),
+        h("p", { className: "reading", style: { fontSize: 16, lineHeight: 1.6, color: "#2A2A2A" } }, article.whyItMatters)
+      )
+    ),
+    /* Section list */
+    h("div", { className: "px-5" },
+      h("div", { className: "text-xs uppercase tracking-widest text-stone-500 mb-3" }, "Sections"),
+      h("div", { className: "space-y-2.5" },
+        SECTIONS.map(sec => {
+          const checked = !!sectionsMap[`${day}-${sec.id}`];
+          // Quiz / reflection extras
+          let extra = null;
+          if (sec.id === "quiz") {
+            const q = LS.get(K.quiz(day), null);
+            if (q && q.submitted) extra = `Score ${q.score}/5`;
+          }
+          if (sec.id === "reflection") {
+            const r = LS.get(K.reflection(day), "");
+            const words = r.trim() ? r.trim().split(/\s+/).length : 0;
+            if (words > 0) extra = `${words} word${words === 1 ? "" : "s"} written`;
+          }
+          return h("div", { key: sec.id, className: "bg-white border border-stone-200 rounded-2xl flex items-stretch overflow-hidden" },
+            h("button", {
+              onClick: () => onOpenSection(sec.id),
+              className: "flex-1 text-left px-4 py-3.5 active:bg-stone-50 flex items-center gap-3",
+              style: { minHeight: 64 }
+            },
+              h("div", { className: "w-9 h-9 rounded-full flex items-center justify-center text-base serif", style: { backgroundColor: cat.bg, color: cat.text, fontWeight: 600 } }, sec.icon),
+              h("div", { className: "flex-1 min-w-0" },
+                h("div", { className: "text-[15px] font-semibold text-stone-900 leading-tight" }, sec.label),
+                h("div", { className: "text-xs text-stone-500 mt-0.5" }, extra || sec.blurb)
+              ),
+              h("svg", { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", className: "text-stone-300" },
+                h("path", { d: "M9 18l6-6-6-6", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" })
+              )
+            ),
+            h("button", {
+              onClick: () => onMarkSection(sec.id, !checked),
+              className: "px-3 flex items-center justify-center border-l border-stone-100 active:bg-stone-50",
+              "aria-label": checked ? "Mark as not done" : "Mark as done",
+              style: { minWidth: 56 }
+            }, h(Check, { done: checked, color: cat.solid }))
+          );
+        })
+      )
+    ),
+    /* Day complete banner */
+    complete && h("div", { className: "px-5 mt-8" },
+      h("div", { className: "rounded-2xl p-5 text-center text-white", style: { backgroundColor: "#0F766E" } },
+        h("div", { className: "text-2xl mb-1" }, "🎉"),
+        h("div", { className: "serif text-xl mb-1.5", style: { fontWeight: 600 } },
+          userName ? `Well done, ${userName}.` : "Day complete."
+        ),
+        h("div", { className: "text-sm opacity-90 mb-4" },
+          nextDay > TOTAL_DAYS
+            ? "You have finished the course. See the Progress tab for what's next."
+            : `Day ${nextDay} is now unlocked.`
+        ),
+        nextDay <= TOTAL_DAYS && h("button", {
+          onClick: () => onAdvance(nextDay),
+          className: "w-full py-3 rounded-xl bg-white text-stone-900 font-semibold text-sm",
+          style: { minHeight: 48 }
+        }, `Start Day ${nextDay} →`)
+      )
+    )
+  );
+}
+
+/* ============================================================
+   SECTION DETAIL VIEW (shared shell with reading progress)
+   ============================================================ */
+function SectionDetail({ day, article, sectionId, sectionsMap, onBack, onMarkSection, refreshTick }) {
+  const topic = CURRICULUM.find(t => t.day === day);
+  const cat = CATEGORY_COLORS[normCat(article.category || topic.category)];
+  const sec = SECTIONS.find(s => s.id === sectionId);
+  const checked = !!sectionsMap[`${day}-${sectionId}`];
+  const progress = useScrollProgress();
+  const [allHighlights, setAllHighlights] = useState(() => getHighlights());
+  const onChangeHighlights = useCallback((updated) => setAllHighlights({ ...updated }), []);
+  const highlightsFor = (sid) => getHighlightsFor(day, sid, allHighlights);
+  const [selectionInfo, setSelectionInfo] = useState(null);
+  useEffect(() => { _setSelectionAction = (info) => setSelectionInfo(info); return () => { _setSelectionAction = null; }; }, []);
+  useEffect(() => { setSelectionInfo(null); }, [sectionId]); // clear when switching sections
+
+  useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" }); }, [sectionId]);
+
+  // Render section body
+  let body;
+  if (sectionId === "why") body = h(WhyView, { article, day, highlights: highlightsFor("why"), onChangeHighlights });
+  else if (sectionId === "map") body = h(MapView, { article, day, highlights: highlightsFor("map"), onChangeHighlights });
+  else if (sectionId === "timeline") body = h(TimelineView, { article, cat });
+  else if (sectionId === "article") body = h(ArticleView, { article, day, allHighlights, onChangeHighlights });
+  else if (sectionId === "terms") body = h(TermsView, { article });
+  else if (sectionId === "facts") body = h(FactsView, { article, cat });
+  else if (sectionId === "quiz") body = h(QuizView, { article, day, refreshTick });
+  else if (sectionId === "reflection") body = h(ReflectionView, { article, day, refreshTick });
+
+  return h("div", { className: "fade-in pb-28" },
+    /* Sticky top bar with reading progress */
+    h("div", { className: "sticky top-0 z-20 safe-top", style: { backgroundColor: "rgba(250,248,244,0.94)", backdropFilter: "blur(8px)" } },
+      h("div", { className: "px-4 py-3 flex items-center gap-3" },
+        h("button", { onClick: onBack, className: "w-10 h-10 flex items-center justify-center rounded-full active:bg-stone-100", "aria-label": "Back" },
+          h("svg", { width: 22, height: 22, viewBox: "0 0 24 24", fill: "none" },
+            h("path", { d: "M15 6l-6 6 6 6", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" })
+          )
+        ),
+        h("div", { className: "flex-1 min-w-0" },
+          h("div", { className: "text-[10px] uppercase tracking-widest text-stone-500" }, `Day ${day} · Section ${SECTION_IDS.indexOf(sectionId)+1}/${SECTION_IDS.length}`),
+          h("div", { className: "text-[15px] font-semibold text-stone-900 leading-tight truncate" }, sec.label),
+        ),
+      ),
+      h("div", { className: "h-1 bg-transparent" },
+        h("div", { className: "h-full transition-[width] duration-100", style: { width: `${progress}%`, backgroundColor: cat.solid } })
+      )
+    ),
+    h("div", { className: "px-5 pt-6" }, body),
+    /* Mark complete bottom CTA */
+    h("div", { className: "px-5 mt-10" },
+      h("button", {
+        onClick: () => onMarkSection(sectionId, !checked),
+        className: "w-full py-4 rounded-2xl font-semibold text-base text-white flex items-center justify-center gap-2",
+        style: { backgroundColor: checked ? "#10B981" : "#1B1B1B", minHeight: 52 }
+      },
+        checked ? "✓ Marked complete  ·  tap to undo" : "Mark this section as read"
+      ),
+      h("button", {
+        onClick: onBack,
+        className: "w-full py-3 text-stone-500 text-sm font-medium mt-2",
+        style: { minHeight: 44 }
+      }, "Back to sections")
+    ),
+    h(HighlightActionBar, { info: selectionInfo, onClose: () => setSelectionInfo(null) })
+  );
+}
+
+/* ============================================================
+   Highlightable paragraph — used across text-heavy sections
+   ============================================================ */
+// Shared bottom-bar controller so all HighlightableText instances share one bottom action bar.
+// (Mobile browsers cover floating popups with the native selection menu; a bottom-fixed bar sits below the menu and is always tappable.)
+let _setSelectionAction = null; // (info|null) => void — set by SectionDetail
+
+function HighlightableText({ text, day, sectionId, highlights, onChangeHighlights }) {
+  const paragraphs = text.split(/\n\n+/);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const onSelect = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+      const range = sel.getRangeAt(0);
+      const startNode = range.startContainer.nodeType === 3 ? range.startContainer.parentElement : range.startContainer;
+      const endNode = range.endContainer.nodeType === 3 ? range.endContainer.parentElement : range.endContainer;
+      if (!containerRef.current || !containerRef.current.contains(startNode) || !containerRef.current.contains(endNode)) return;
+      let pNode = startNode;
+      while (pNode && !pNode.dataset?.para) pNode = pNode.parentElement;
+      let pNodeEnd = endNode;
+      while (pNodeEnd && !pNodeEnd.dataset?.para) pNodeEnd = pNodeEnd.parentElement;
+      if (!pNode || !pNodeEnd || pNode !== pNodeEnd) return;
+      const paraIdx = Number(pNode.dataset.para);
+      const preRange = document.createRange();
+      preRange.selectNodeContents(pNode);
+      preRange.setEnd(range.startContainer, range.startOffset);
+      const start = preRange.toString().length;
+      const end = start + range.toString().length;
+      if (end <= start) return;
+      const selectedText = range.toString();
+      _setSelectionAction && _setSelectionAction({
+        day, sectionId, para: paraIdx, start, end, text: selectedText,
+        apply: () => {
+          const updated = addHighlight(day, sectionId, paraIdx, start, end);
+          onChangeHighlights && onChangeHighlights(updated);
+          try { window.getSelection().removeAllRanges(); } catch(e) {}
+          _setSelectionAction && _setSelectionAction(null);
+        }
+      });
+    };
+    // Fire on selectionchange but also on touchend/mouseup to catch the final selection state
+    document.addEventListener("selectionchange", onSelect);
+    document.addEventListener("mouseup", onSelect);
+    document.addEventListener("touchend", onSelect);
+    return () => {
+      document.removeEventListener("selectionchange", onSelect);
+      document.removeEventListener("mouseup", onSelect);
+      document.removeEventListener("touchend", onSelect);
+    };
+  }, [paragraphs.length, day, sectionId, onChangeHighlights]);
+
+  const removeAt = (para, offset) => {
+    const updated = removeHighlightAt(day, sectionId, para, offset);
+    onChangeHighlights && onChangeHighlights(updated);
+  };
+
+  return h("div", { ref: containerRef, className: "reading" },
+    paragraphs.map((p, i) => {
+      const ranges = (highlights || []).filter(r => r.p === i).sort((a, b) => a.s - b.s);
+      return h("p", { key: i, "data-para": i }, renderParagraph(p, ranges, day, sectionId, i, removeAt));
+    })
+  );
+}
+
+/* Bottom action bar shown when text is selected inside a HighlightableText.
+   Rendered once by SectionDetail; controlled via the shared _setSelectionAction hook. */
+function HighlightActionBar({ info, onClose }) {
+  if (!info) return null;
+  const preview = info.text.length > 60 ? info.text.slice(0, 55).trim() + "…" : info.text;
+  return h("div", {
+    className: "fixed inset-x-0 bottom-0 z-40 safe-bottom",
+    style: { pointerEvents: "auto" }
+  },
+    h("div", { className: "mx-3 mb-3 rounded-2xl bg-stone-900 text-white shadow-2xl overflow-hidden" },
+      h("div", { className: "px-4 pt-3 pb-2 text-[12px] text-white/70 truncate" }, "“", preview, "”"),
+      h("div", { className: "flex" },
+        h("button", {
+          onMouseDown: (e) => e.preventDefault(),
+          onClick: () => info.apply(),
+          className: "flex-1 py-3.5 font-semibold text-[15px] flex items-center justify-center gap-2 active:bg-white/10",
+          style: { minHeight: 52 }
+        },
+          h("span", { style: { color: "#FBBF24", fontSize: 18 } }, "★"),
+          "Highlight"
+        ),
+        h("button", {
+          onClick: () => { try { window.getSelection().removeAllRanges(); } catch(e) {} onClose(); },
+          className: "w-14 border-l border-white/10 text-white/60 active:bg-white/10",
+          style: { minHeight: 52 },
+          "aria-label": "Dismiss"
+        }, "✕")
+      )
+    )
+  );
+}
+
+/* ============================================================
+   Individual section bodies
+   ============================================================ */
+function WhyView({ article, day, highlights, onChangeHighlights }) {
+  return h("div", null,
+    h("div", { className: "text-xs uppercase tracking-widest text-stone-500 mb-3" }, "Why this matters"),
+    h(HighlightableText, { text: article.whyItMatters, day, sectionId: "why", highlights, onChangeHighlights })
+  );
+}
+function MapView({ article, day, highlights, onChangeHighlights }) {
+  const map = article.images && article.images.map;
+  return h("div", null,
+    h("div", { className: "text-xs uppercase tracking-widest text-stone-500 mb-3 flex items-center gap-2" }, h("span", null, "🌍"), "Where in the world"),
+    map && h(MapFigure, { src: map.url, alt: map.alt || "Map for " + article.title, caption: map.caption, credit: map.credit }),
+    h(HighlightableText, { text: article.mapContext, day, sectionId: "map", highlights, onChangeHighlights })
+  );
+}
+function TimelineView({ article, cat }) {
+  return h("div", null,
+    h("div", { className: "text-xs uppercase tracking-widest text-stone-500 mb-4" }, "Timeline"),
+    h("ol", { className: "space-y-4" },
+      (article.timeline || []).map((t, i) => {
+        const dashIdx = t.indexOf("—");
+        const year = dashIdx > -1 ? t.slice(0, dashIdx).trim() : "";
+        const rest = dashIdx > -1 ? t.slice(dashIdx + 1).trim() : t;
+        return h("li", { key: i, className: "flex gap-4" },
+          h("div", { className: "flex flex-col items-center pt-1" },
+            h("div", { className: "w-2.5 h-2.5 rounded-full", style: { backgroundColor: cat.solid } }),
+            i < article.timeline.length - 1 && h("div", { className: "w-px flex-1 mt-1.5", style: { backgroundColor: "#E5E0D6", minHeight: 18 } })
+          ),
+          h("div", { className: "flex-1 pb-2" },
+            h("div", { className: "serif text-base font-semibold mb-0.5", style: { color: cat.solid } }, year || "•"),
+            h("div", { className: "reading", style: { fontSize: 17, lineHeight: 1.6 } }, rest)
+          )
+        );
+      })
+    )
+  );
+}
+function ArticleView({ article, day, allHighlights, onChangeHighlights }) {
+  const introKey = "article-intro";
+  const introHighlights = getHighlightsFor(day, introKey, allHighlights);
+  return h("div", null,
+    h("div", { className: "text-xs uppercase tracking-widest text-stone-500 mb-4" }, "The main article"),
+    h(HighlightableText, { text: article.mainArticle.intro || "", day, sectionId: introKey, highlights: introHighlights, onChangeHighlights }),
+    (article.mainArticle.sections || []).map((sec, i) => {
+      const sid = `article-s${i}`;
+      const hs = getHighlightsFor(day, sid, allHighlights);
+      return h("div", { key: i, className: "mt-8" },
+        h("h2", { className: "serif text-2xl text-stone-900 mb-3", style: { fontWeight: 600, lineHeight: 1.25 } }, sec.heading),
+        h(HighlightableText, { text: sec.content, day, sectionId: sid, highlights: hs, onChangeHighlights })
+      );
+    })
+  );
+}
+function TermsView({ article }) {
+  return h("div", null,
+    h("div", { className: "text-xs uppercase tracking-widest text-stone-500 mb-4" }, "Key terms"),
+    h("div", { className: "space-y-3" },
+      (article.keyTerms || []).map((kt, i) =>
+        h("div", { key: i, className: "bg-white border border-stone-200 rounded-2xl p-4" },
+          h("div", { className: "font-semibold text-stone-900 mb-1.5 serif text-lg" }, kt.term),
+          h("div", { className: "text-stone-700", style: { fontSize: 15.5, lineHeight: 1.65 } }, kt.definition)
+        )
+      )
+    )
+  );
+}
+function FactsView({ article, cat }) {
+  return h("div", null,
+    h("div", { className: "text-xs uppercase tracking-widest text-stone-500 mb-4" }, "Did you know?"),
+    h("div", { className: "space-y-3" },
+      (article.didYouKnow || []).map((f, i) =>
+        h("div", { key: i, className: "rounded-2xl p-5", style: { backgroundColor: cat.bg } },
+          h("div", { className: "text-[10px] uppercase tracking-widest mb-2 font-semibold", style: { color: cat.text } }, `Fact ${i+1}`),
+          h("div", { className: "reading", style: { fontSize: 17.5 } }, f)
+        )
+      )
+    )
+  );
+}
+
+/* QUIZ */
+function QuizView({ article, day, refreshTick }) {
+  const quiz = article.quiz || [];
+  const saved = LS.get(K.quiz(day), null);
+  const [answers, setAnswers] = useState(saved ? saved.answers : Array(quiz.length).fill(null));
+  const [submitted, setSubmitted] = useState(saved ? !!saved.submitted : false);
+  const [score, setScore] = useState(saved ? saved.score : 0);
+
+  const allAnswered = answers.every(a => a !== null);
+
+  const submit = () => {
+    const newScore = answers.reduce((s, a, i) => s + (a === quiz[i].correctIndex ? 1 : 0), 0);
+    setScore(newScore);
+    setSubmitted(true);
+    LS.set(K.quiz(day), { answers, score: newScore, submitted: true });
+    if (refreshTick) refreshTick();
+  };
+  const retake = () => {
+    setAnswers(Array(quiz.length).fill(null));
+    setSubmitted(false);
+    setScore(0);
+    LS.rm(K.quiz(day));
+    if (refreshTick) refreshTick();
+  };
+
+  return h("div", null,
+    h("div", { className: "text-xs uppercase tracking-widest text-stone-500 mb-1" }, "Quiz"),
+    h("p", { className: "text-sm text-stone-500 mb-5" }, "Five questions. Test your understanding, not your memory."),
+
+    h("div", { className: "space-y-5" },
+      quiz.map((q, qi) =>
+        h("div", { key: qi, className: "bg-white border border-stone-200 rounded-2xl p-4" },
+          h("div", { className: "text-[11px] uppercase tracking-widest text-stone-400 mb-2 font-medium" }, `Question ${qi + 1}`),
+          h("p", { className: "text-[16.5px] text-stone-900 mb-4 leading-snug", style: { fontWeight: 500 } }, q.question),
+          h("div", { className: "space-y-2" },
+            q.options.map((opt, oi) => {
+              const selected = answers[qi] === oi;
+              const correct = submitted && oi === q.correctIndex;
+              const wrongChosen = submitted && selected && oi !== q.correctIndex;
+              let cls = "border-stone-200 bg-white";
+              if (selected && !submitted) cls = "border-stone-900 bg-stone-50";
+              if (correct) cls = "border-emerald-500 bg-emerald-50";
+              if (wrongChosen) cls = "border-rose-400 bg-rose-50";
+              return h("button", {
+                key: oi,
+                onClick: () => !submitted && setAnswers(a => { const c = [...a]; c[qi] = oi; return c; }),
+                disabled: submitted,
+                className: `w-full text-left px-4 py-3 rounded-xl border-2 transition-colors flex items-start gap-3 ${cls}`,
+                style: { minHeight: 48 }
+              },
+                h("span", { className: "text-sm font-semibold text-stone-500 mt-0.5" }, String.fromCharCode(65 + oi)),
+                h("span", { className: "text-[15.5px] text-stone-800 leading-snug flex-1" }, opt),
+                correct && h("span", { className: "text-emerald-600 text-xl leading-none" }, "✓"),
+                wrongChosen && h("span", { className: "text-rose-500 text-xl leading-none" }, "✗"),
+              );
+            })
+          ),
+          submitted && h("div", { className: "mt-3 px-3 py-2 bg-stone-50 rounded-lg text-[13.5px] text-stone-700 leading-relaxed" },
+            h("span", { className: "font-semibold text-stone-900" }, "Why: "), q.explanation
+          )
+        )
+      )
+    ),
+
+    !submitted ? h("button", {
+      onClick: submit,
+      disabled: !allAnswered,
+      className: "mt-6 w-full py-4 rounded-2xl text-white font-semibold text-base",
+      style: { backgroundColor: allAnswered ? "#1B1B1B" : "#A8A29E", minHeight: 52 }
+    }, "Submit answers")
+      : h("div", { className: "mt-6 space-y-2.5" },
+          h("div", { className: "bg-stone-900 text-white rounded-2xl p-5 text-center" },
+            h("div", { className: "text-[11px] uppercase tracking-widest text-stone-400 mb-1" }, "Your score"),
+            h("div", { className: "serif text-5xl", style: { fontWeight: 600 } }, score, h("span", { className: "text-2xl text-stone-400" }, ` / ${quiz.length}`))
+          ),
+          h("button", { onClick: retake, className: "w-full py-3 rounded-xl bg-stone-100 text-stone-700 text-sm font-medium", style: { minHeight: 44 } }, "Retake quiz")
+        )
+  );
+}
+
+/* REFLECTION */
+function ReflectionView({ article, day, refreshTick }) {
+  const [text, setText] = useState(LS.get(K.reflection(day), ""));
+  const onChange = (v) => {
+    setText(v);
+    LS.set(K.reflection(day), v);
+  };
+  const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+  return h("div", null,
+    h("div", { className: "text-xs uppercase tracking-widest text-stone-500 mb-1" }, "Reflection"),
+    h("p", { className: "text-sm text-stone-500 mb-4" }, "Write it in your own words. There is no grading — this is how you remember it."),
+    h("div", { className: "bg-white border border-stone-200 rounded-2xl p-4 mb-3" },
+      h("div", { className: "reading", style: { fontSize: 17, color: "#3a3a3a" } }, article.reflectionPrompt)
+    ),
+    h("textarea", {
+      value: text,
+      onChange: (e) => { onChange(e.target.value); if (refreshTick) refreshTick(); },
+      onBlur: () => { if (refreshTick) refreshTick(); },
+      placeholder: "Write 3–4 sentences…",
+      rows: 9,
+      className: "w-full p-4 bg-white border border-stone-200 rounded-2xl focus:outline-none focus:border-stone-400 reading resize-none",
+      style: { fontSize: 17.5, lineHeight: 1.7, minHeight: 200 }
+    }),
+    h("div", { className: "text-xs text-stone-400 text-right mt-1" }, `${wordCount} word${wordCount === 1 ? "" : "s"}`)
+  );
+}
+
+/* ============================================================
+   ARCHIVE
+   ============================================================ */
+function ArchiveScreen({ sectionsMap, maxDay, onOpenDay }) {
+  return h("div", { className: "px-5 pt-6 pb-28 safe-top" },
+    h("h1", { className: "serif text-3xl text-stone-900 mb-1", style: { fontWeight: 600 } }, "Archive"),
+    h("p", { className: "text-sm text-stone-500 mb-6" }, "Every day you have unlocked. Tap to re-read."),
+    h("div", { className: "space-y-2.5" },
+      CURRICULUM.map(t => {
+        const isFuture = t.day >= maxDay && !isDayComplete(t.day, sectionsMap) && t.day !== maxDay;
+        // Locked: any day beyond maxDay (i.e., next-unlocked day)
+        const locked = t.day > maxDay;
+        const done = isDayComplete(t.day, sectionsMap);
+        const inProgress = !done && countSectionsDone(t.day, sectionsMap) > 0;
+        const cat = CATEGORY_COLORS[normCat(t.category)];
+        const q = LS.get(K.quiz(t.day), null);
+        return h("button", {
+          key: t.day,
+          onClick: () => !locked && onOpenDay(t.day),
+          disabled: locked,
+          className: `w-full text-left bg-white border rounded-2xl p-4 flex items-start gap-3 ${locked ? "opacity-50" : "active:bg-stone-50"}`,
+          style: { borderColor: done ? cat.solid + "55" : "#E8E4DA", minHeight: 64 }
+        },
+          h("div", { className: "flex flex-col items-center justify-center min-w-[40px] pt-0.5" },
+            h("div", { className: "text-[10px] text-stone-400 uppercase tracking-widest" }, "Day"),
+            h("div", { className: "serif text-xl font-semibold text-stone-900 leading-none mt-0.5" }, t.day)
+          ),
+          h("div", { className: "flex-1 min-w-0" },
+            h("div", { className: "text-[15px] font-semibold text-stone-900 leading-snug mb-1.5" }, t.title),
+            h("div", { className: "flex items-center gap-2 flex-wrap" },
+              h(CategoryBadge, { category: t.category, size: "sm" }),
+              q && q.submitted && h("span", { className: "text-[11px] text-stone-500" }, `Quiz ${q.score}/5`),
+              inProgress && h("span", { className: "text-[11px] text-amber-700 font-medium" }, `${countSectionsDone(t.day, sectionsMap)}/${SECTION_IDS.length} sections`)
+            )
+          ),
+          h("div", { className: "pt-1.5" },
+            locked && h("span", { className: "text-stone-300" },
+              h("svg", { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none" },
+                h("path", { d: "M6 10V8a6 6 0 1112 0v2M5 10h14v10H5z", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round" })
+              )
+            ),
+            done && h(Check, { done: true, color: cat.solid }),
+            !done && !locked && t.day === maxDay && h("span", { className: "text-[10px] font-bold px-2 py-1 rounded-full", style: { backgroundColor: "#1B1B1B", color: "white" } }, "TODAY"),
+          )
+        );
+      })
+    )
+  );
+}
+
+/* ============================================================
+   PROGRESS + COMPLETION
+   ============================================================ */
+function ProgressScreen({ sectionsMap, maxDay, userName }) {
+  const totalDone = totalCompletedDays(sectionsMap);
+  const pct = Math.round(totalDone / TOTAL_DAYS * 100);
+  // Average quiz score
+  const allQuizzes = CURRICULUM.map(t => LS.get(K.quiz(t.day), null)).filter(q => q && q.submitted);
+  const avgScore = allQuizzes.length ? (allQuizzes.reduce((s, q) => s + q.score, 0) / allQuizzes.length) : 0;
+  // Streak: consecutive completed days ending at maxDay-1
+  let streak = 0;
+  for (let d = maxDay - 1; d >= 1 && isDayComplete(d, sectionsMap); d--) streak++;
+  const weeks = Array.from({ length: 16 }, (_, w) => CURRICULUM.filter(t => t.week === w + 1));
+  const allDone = totalDone === TOTAL_DAYS;
+
+  return h("div", { className: "px-5 pt-6 pb-28 safe-top" },
+    h("h1", { className: "serif text-3xl text-stone-900 mb-1", style: { fontWeight: 600 } }, "Progress"),
+    h("p", { className: "text-sm text-stone-500 mb-6" }, "Ninety-one days. One mind, slowly filling up."),
+
+    allDone && h(GraduationCard, { userName }),
+
+    h("div", { className: "grid grid-cols-3 gap-2.5 mb-6" },
+      h(StatCard, { label: "Done", value: `${pct}%`, sub: `${totalDone} / ${TOTAL_DAYS}` }),
+      h(StatCard, { label: "Avg quiz", value: avgScore.toFixed(1), sub: "out of 5" }),
+      h(StatCard, { label: "Streak", value: String(streak), sub: streak === 1 ? "day" : "days" }),
+    ),
+    h("div", { className: "mb-2" }, h(ProgressBar, { pct, color: "#1B1B1B", height: 6 })),
+    h("div", { className: "text-[11px] text-stone-500 mt-1.5 mb-6 text-center" }, allDone ? "All ninety-one days complete." : `${TOTAL_DAYS - totalDone} days to go.`),
+
+    h("div", { className: "space-y-3.5" },
+      weeks.map((days, wi) =>
+        h("div", { key: wi },
+          h("div", { className: "flex items-center justify-between mb-1.5" },
+            h("div", { className: "text-[11px] uppercase tracking-widest text-stone-500 font-semibold" }, "Week ", wi + 1),
+            h("div", { className: "text-[11px] text-stone-400" }, days.filter(d => isDayComplete(d.day, sectionsMap)).length, " / ", days.length)
+          ),
+          h("div", { className: "flex gap-1.5" },
+            days.map(d => {
+              const done = isDayComplete(d.day, sectionsMap);
+              const isCurrent = d.day === maxDay && !done;
+              const locked = d.day > maxDay;
+              let bg = "#E7E5E4", txt = "#A8A29E";
+              if (done) { bg = "#10B981"; txt = "#fff"; }
+              else if (isCurrent) { bg = "#1B1B1B"; txt = "#fff"; }
+              return h("div", {
+                key: d.day,
+                title: `Day ${d.day}: ${d.title}`,
+                className: "flex-1 aspect-square rounded-md flex items-center justify-center text-[11px] font-semibold",
+                style: { backgroundColor: bg, color: txt, minHeight: 28, opacity: locked ? 0.55 : 1 }
+              }, d.day)
+            })
+          )
+        )
+      )
+    )
+  );
+}
+function StatCard({ label, value, sub }) {
+  return h("div", { className: "bg-white border border-stone-200 rounded-2xl p-3.5 text-center" },
+    h("div", { className: "text-[10px] uppercase tracking-widest text-stone-400 mb-1.5 font-semibold" }, label),
+    h("div", { className: "serif text-2xl text-stone-900 leading-none", style: { fontWeight: 600 } }, value),
+    h("div", { className: "text-[11px] text-stone-500 mt-1" }, sub)
+  );
+}
+
+function GraduationCard({ userName }) {
+  return h("div", { className: "mb-6 rounded-3xl p-6 text-white relative overflow-hidden", style: { background: "linear-gradient(135deg, #0F766E 0%, #1F2937 100%)" } },
+    h("div", { className: "text-3xl mb-2" }, "🎓"),
+    h("div", { className: "serif text-2xl mb-2", style: { fontWeight: 600 } },
+      userName ? `Congratulations, ${userName}.` : "Congratulations."
+    ),
+    h("p", { className: "text-sm opacity-90 mb-4 leading-relaxed" },
+      "You've finished the course. Ninety-one days, from the first cities of Mesopotamia to the world heading into the next decade. ",
+      "You now have a coherent mental map of how the modern world got here. Below: a few quiet next steps for keeping it growing."
+    ),
+    h("div", { className: "space-y-3 mt-5" },
+      h(NextStepRow, { title: "Read one good newspaper every morning", body: "The Economist (paid), Reuters, the BBC, or Al Jazeera English. Twenty minutes. Don't doom-scroll — read the actual longer pieces." }),
+      h(NextStepRow, { title: "Pick three rabbit holes from the course", body: "Anything that grabbed you here — the Mongols, the Mughals, the Cuban Missile Crisis, the AI question — and read one good book on each." }),
+      h(NextStepRow, { title: "Follow a few good explainers on YouTube", body: "Try CGP Grey, Vox, Kurzgesagt, RealLifeLore, Crash Course (history, world history, economics), Tom Scott. Skip the rage-bait." }),
+      h(NextStepRow, { title: "Listen to one good podcast a week", body: "The Rest Is Politics, Hardcore History (Dan Carlin), Empire (Anita Anand & William Dalrymple), The Daily, Plain History." }),
+      h(NextStepRow, { title: "Re-read this course in six months", body: "It'll all click at a deeper level the second time. Memory is built by re-encountering, not by trying harder the first time." }),
+      h(NextStepRow, { title: "Teach one topic from here to someone", body: "Pick any day. Explain it to a friend over coffee. You'll suddenly notice what you actually understood — and what you didn't." }),
+    )
+  );
+}
+function NextStepRow({ title, body }) {
+  return h("div", { className: "border-t border-white/15 pt-3" },
+    h("div", { className: "text-[15px] font-semibold mb-1" }, title),
+    h("div", { className: "text-[13.5px] opacity-80 leading-relaxed" }, body)
+  );
+}
+
+/* ============================================================
+   BOTTOM NAV
+   ============================================================ */
+function BottomNav({ tab, setTab }) {
+  const items = [
+    { id: "today",    label: "Today",    icon: "📖" },
+    { id: "archive",  label: "Archive",  icon: "🗂" },
+    { id: "progress", label: "Progress", icon: "📊" },
+  ];
+  return h("div", { className: "fixed bottom-0 inset-x-0 z-30 bg-white border-t border-stone-200 safe-bottom" },
+    h("div", { className: "flex" }, items.map(it => {
+      const active = tab === it.id;
+      return h("button", {
+        key: it.id,
+        onClick: () => setTab(it.id),
+        className: "flex-1 py-2 flex flex-col items-center gap-0.5",
+        style: { minHeight: 58 }
+      },
+        h("span", { className: "text-xl leading-none", style: { opacity: active ? 1 : 0.4 } }, it.icon),
+        h("span", { className: "text-[11px] font-semibold", style: { color: active ? "#1B1B1B" : "#A8A29E" } }, it.label)
+      );
+    }))
+  );
+}
+
+/* ============================================================
+   SETTINGS MODAL
+   ============================================================ */
+function SettingsModal({ userName, onSaveName, onClose, onClearProgress }) {
+  const [name, setName] = useState(userName || "");
+  const [confirmClear, setConfirmClear] = useState(false);
+  return h("div", { className: "fixed inset-0 z-50 bg-black/40 flex items-end", onClick: onClose },
+    h("div", { className: "w-full bg-white rounded-t-3xl p-5 safe-bottom max-h-[80vh] overflow-y-auto", onClick: (e) => e.stopPropagation() },
+      h("div", { className: "w-10 h-1 bg-stone-200 rounded-full mx-auto mb-4" }),
+      h("h3", { className: "serif text-2xl text-stone-900 mb-5", style: { fontWeight: 600 } }, "Settings"),
+
+      h("div", { className: "mb-4" },
+        h("label", { className: "text-xs uppercase tracking-widest text-stone-500 font-semibold mb-2 block" }, "Your name"),
+        h("div", { className: "flex gap-2" },
+          h("input", {
+            type: "text", value: name, onChange: (e) => setName(e.target.value),
+            placeholder: "Your name", maxLength: 40,
+            className: "flex-1 text-base py-3 px-3 bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:border-stone-400",
+          }),
+          h("button", {
+            onClick: () => onSaveName(name.trim()),
+            className: "px-4 rounded-lg bg-stone-900 text-white font-semibold text-sm",
+            style: { minHeight: 48 }
+          }, "Save")
+        )
+      ),
+
+      h("div", { className: "mb-3 pt-3 border-t border-stone-100" },
+        h("div", { className: "text-xs uppercase tracking-widest text-stone-500 font-semibold mb-2" }, "About"),
+        h("p", { className: "text-[13.5px] text-stone-600 leading-relaxed" },
+          "One topic a day, ninety-one days — history, geography, religion, politics, economics, and current affairs, in the order they actually unfolded. Read, take the quiz, write a short reflection. The world becomes a connected story instead of scattered facts."
+        ),
+      ),
+
+      h("div", { className: "mt-5 pt-4 border-t border-stone-100" },
+        !confirmClear
+          ? h("button", { onClick: () => setConfirmClear(true), className: "w-full py-3 rounded-xl bg-rose-50 text-rose-700 font-medium text-sm", style: { minHeight: 48 } }, "Reset all progress")
+          : h("div", null,
+              h("p", { className: "text-sm text-stone-700 mb-2.5 text-center" }, "This will erase all checks, quizzes and reflections. Are you sure?"),
+              h("div", { className: "flex gap-2" },
+                h("button", { onClick: () => setConfirmClear(false), className: "flex-1 py-3 rounded-xl bg-stone-100 text-stone-700 font-medium text-sm", style: { minHeight: 48 } }, "Cancel"),
+                h("button", { onClick: () => { onClearProgress(); setConfirmClear(false); onClose(); }, className: "flex-1 py-3 rounded-xl bg-rose-600 text-white font-semibold text-sm", style: { minHeight: 48 } }, "Yes, reset"),
+              )
+            )
+      ),
+
+      h("button", { onClick: onClose, className: "w-full py-3 mt-3 text-stone-500 text-sm font-medium" }, "Close")
+    )
+  );
+}
+
+/* ============================================================
+   ROOT APP
+   ============================================================ */
+function App() {
+  const [onboarded, setOnboarded] = useState(() => LS.get(K.onboarded, false));
+  const [userName, setUserName] = useState(() => LS.get(K.name, ""));
+  const [tab, setTab] = useState("today");
+  const [sectionsMap, setSectionsMapState] = useState(() => getSections());
+  const [activeDay, setActiveDay] = useState(() => {
+    const saved = LS.get(K.activeDay, null);
+    const mx = maxUnlockedDay(getSections());
+    return saved && saved <= mx ? saved : mx;
+  });
+  const [activeSection, setActiveSection] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState(null);
+  const [, forceTick] = useState(0);
+  const refreshTick = useCallback(() => forceTick(t => t + 1), []);
+
+  // Wire the lightbox opener so image components can call it
+  useEffect(() => { _openLightbox = (img) => setLightboxImage(img); return () => { _openLightbox = null; }; }, []);
+
+  // Persist activeDay
+  useEffect(() => { LS.set(K.activeDay, activeDay); }, [activeDay]);
+
+  const maxUnlocked = maxUnlockedDay(sectionsMap);
+
+  const completeOnboarding = (name) => {
+    LS.set(K.onboarded, true);
+    LS.set(K.name, name || "");
+    setUserName(name || "");
+    setOnboarded(true);
+    setActiveDay(1);
+  };
+
+  const markSection = useCallback((day, sectionId, value) => {
+    setSectionsMapState(prev => {
+      const next = { ...prev };
+      const key = `${day}-${sectionId}`;
+      if (value) next[key] = true;
+      else delete next[key];
+      setSections(next);
+      return next;
+    });
+  }, []);
+
+  const clearAll = () => {
+    LS.rm(K.sections);
+    CURRICULUM.forEach(t => { LS.rm(K.quiz(t.day)); LS.rm(K.reflection(t.day)); });
+    setSectionsMapState({});
+    setActiveDay(1);
+    setActiveSection(null);
+  };
+
+  const saveName = (name) => {
+    LS.set(K.name, name);
+    setUserName(name);
+  };
+
+  if (!onboarded) return h(Onboarding, { onDone: completeOnboarding });
+
+  if (!window.DAILY_ARTICLES) {
+    return h("div", { className: "min-h-screen flex flex-col items-center justify-center px-8 text-center" },
+      h("h2", { className: "serif text-2xl text-stone-900 mb-2" }, "Couldn't load articles"),
+      h("p", { className: "text-stone-500 text-sm leading-relaxed" }, "data.js failed to load. If you're opening the file directly, make sure data.js is in the same folder as index.html.")
+    );
+  }
+
+  const article = getArticle(activeDay);
+  if (!article) {
+    return h("div", { className: "min-h-screen flex flex-col items-center justify-center px-8 text-center" },
+      h("h2", { className: "serif text-2xl text-stone-900 mb-2" }, "Article missing"),
+      h("p", { className: "text-stone-500 text-sm" }, "Day ", activeDay, " is not available.")
+    );
+  }
+
+  let body;
+  if (tab === "today") {
+    body = activeSection
+      ? h(SectionDetail, {
+          day: activeDay, article, sectionId: activeSection, sectionsMap,
+          onBack: () => setActiveSection(null),
+          onMarkSection: (id, v) => markSection(activeDay, id, v),
+          refreshTick,
+        })
+      : h(DayOverview, {
+          day: activeDay, article, sectionsMap, userName,
+          onOpenSection: (id) => setActiveSection(id),
+          onMarkSection: (id, v) => markSection(activeDay, id, v),
+          onAdvance: (d) => { setActiveDay(d); setActiveSection(null); window.scrollTo(0, 0); },
+        });
+  } else if (tab === "archive") {
+    body = h(ArchiveScreen, {
+      sectionsMap, maxDay: maxUnlocked,
+      onOpenDay: (d) => { setActiveDay(d); setActiveSection(null); setTab("today"); window.scrollTo(0, 0); }
+    });
+  } else if (tab === "progress") {
+    body = h(ProgressScreen, { sectionsMap, maxDay: maxUnlocked, userName });
+  }
+
+  return h("div", { className: "relative" },
+    body,
+    /* Settings button — top right, hidden in section-detail to keep reading clean */
+    !(tab === "today" && activeSection) && h("button", {
+      onClick: () => setShowSettings(true),
+      className: "fixed top-3 right-3 z-30 w-10 h-10 rounded-full bg-white/90 border border-stone-200 flex items-center justify-center text-stone-500",
+      style: { marginTop: "env(safe-area-inset-top, 0)" },
+      "aria-label": "Settings"
+    }, h("svg", { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none" },
+      h("circle", { cx: 12, cy: 12, r: 3, stroke: "currentColor", strokeWidth: 1.7 }),
+      h("path", { d: "M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06A2 2 0 113.4 16.96l.06-.06A1.65 1.65 0 003.79 15a1.65 1.65 0 00-1.51-1H2a2 2 0 010-4h.09A1.65 1.65 0 003.79 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 008.11 4.79 1.65 1.65 0 009 3.28V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.21 9a1.65 1.65 0 001.51 1H22a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z", stroke: "currentColor", strokeWidth: 1.4, strokeLinejoin: "round" }),
+    )),
+    showSettings && h(SettingsModal, {
+      userName,
+      onSaveName: (n) => { saveName(n); setShowSettings(false); },
+      onClose: () => setShowSettings(false),
+      onClearProgress: clearAll
+    }),
+    h(BottomNav, { tab, setTab: (t) => { setActiveSection(null); setTab(t); } }),
+    h(Lightbox, { image: lightboxImage, onClose: () => setLightboxImage(null) })
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(h(App));
+</script>
+</body>
+</html>
